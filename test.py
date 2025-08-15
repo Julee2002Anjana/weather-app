@@ -6,33 +6,30 @@ from datetime import datetime
 
 API_KEY = "39f60aa25fc2c46f00a018ec05c0aac6"
 
-# Weather description to icon mapping
+# ---------------- Weather icons for day and night ----------------
 ICON_MAP = {
-    "clear sky": "icons/01.png",
-    "few clouds": "icons/02.png",
-    "scattered clouds": "icons/07.png",
-    "broken clouds": "icons/08.png",
-    "shower rain": "icons/09.png",
-    "rain": "icons/06.png",
-    "thunderstorm": "icons/03.png",
-    "mist": "icons/05.png"
+    "clear sky": {"day": "icons/01.png", "night": "icons/10.png"},
+    "few clouds": {"day": "icons/02.png", "night": "icons/11.png"},
+    "scattered clouds": {"day": "icons/07.png", "night": "icons/15.png"},
+    "broken clouds": {"day": "icons/08.png", "night": "icons/16.png"},
+    "shower rain": {"day": "icons/09.png", "night": "icons/14.png"},
+    "rain": {"day": "icons/06.png", "night": "icons/06.png"},
+    "thunderstorm": {"day": "icons/03.png", "night": "icons/13.png"},
+    "mist": {"day": "icons/05.png", "night": "icons/17.png"}
 }
 
-def get_icon_path(description):
-    """
-    Finds the correct local icon for a weather description.
-    Uses partial matching to handle cases like 'light rain', 'overcast clouds'.
-    """
+def get_icon_path(description, current_time, sunrise, sunset):
     desc = description.lower()
+    is_daytime = sunrise <= current_time <= sunset
     for key in ICON_MAP:
-        if key in desc:  # partial match
-            return ICON_MAP[key]
-    return "icons/01.png"  # default icon if nothing matches
+        if key in desc:
+            return ICON_MAP[key]["day"] if is_daytime else ICON_MAP[key]["night"]
+    return ICON_MAP["clear sky"]["day"] if is_daytime else ICON_MAP["clear sky"]["night"]
 
+# ---------------- Weather Fetch ----------------
 def get_weather(city):
     url = f"https://api.openweathermap.org/data/2.5/weather?q={city}&appid={API_KEY}&units=metric"
     forecast_url = f"https://api.openweathermap.org/data/2.5/forecast?q={city}&appid={API_KEY}&units=metric"
-
     try:
         weather_data = requests.get(url).json()
         forecast_data = requests.get(forecast_url).json()
@@ -47,6 +44,10 @@ def get_weather(city):
         wind_speed = weather_data['wind']['speed']
         date = datetime.now().strftime("%A, %d %B %Y")
 
+        current_time = weather_data['dt']
+        sunrise = weather_data['sys']['sunrise']
+        sunset = weather_data['sys']['sunset']
+
         city_label.config(text=city.title())
         date_label.config(text=date)
         temp_label.config(text=f"{int(temp)}°C")
@@ -54,21 +55,19 @@ def get_weather(city):
         humidity_label.config(text=f"💧 {humidity}%")
         wind_label.config(text=f"🌬 {wind_speed} m/s")
 
-        # Main icon (local image)
-        icon_path = get_icon_path(weather_desc)
+        icon_path = get_icon_path(weather_desc, current_time, sunrise, sunset)
         icon_img = Image.open(icon_path).resize((150, 150), Image.LANCZOS)
         icon_photo = ImageTk.PhotoImage(icon_img)
         main_icon_label.config(image=icon_photo)
         main_icon_label.image = icon_photo
 
-        # Forecast (next 3 days)
         for i in range(1, 4):
             day_data = forecast_data['list'][i * 8]
             date_txt = datetime.strptime(day_data['dt_txt'], "%Y-%m-%d %H:%M:%S")
             day_label[i-1].config(text=date_txt.strftime("%b %d"))
 
             forecast_desc = day_data['weather'][0]['description']
-            forecast_icon_path = get_icon_path(forecast_desc)
+            forecast_icon_path = get_icon_path(forecast_desc, day_data['dt'], sunrise, sunset)
             forecast_icon_img = Image.open(forecast_icon_path).resize((80, 80), Image.LANCZOS)
             forecast_icon_photo = ImageTk.PhotoImage(forecast_icon_img)
             icon_label[i-1].config(image=forecast_icon_photo)
@@ -79,84 +78,129 @@ def get_weather(city):
     except Exception as e:
         messagebox.showerror("Error", f"Could not get weather: {e}")
 
-# ----------------- UI -----------------
+def resize_bg(event):
+    new_width = event.width
+    new_height = event.height
+    resized = bg_img.resize((new_width, new_height), Image.LANCZOS)
+    bg_photo_resized = ImageTk.PhotoImage(resized)
+    bg_label.config(image=bg_photo_resized)
+    bg_label.image = bg_photo_resized  
+
+# ----------------- Root -----------------
 root = tk.Tk()
 root.title("Weather App")
-root.geometry("420x640")
-root.configure(bg="#2b2d42")
+root.geometry("480x720")
 
-frame = tk.Frame(root, bg="#3a3f58", bd=0, relief="flat")
-frame.place(relx=0.5, rely=0.5, anchor="center", width=360, height=580)
+# Load background image
+bg_img = Image.open("background.jpg")
+bg_photo = ImageTk.PhotoImage(bg_img)
+bg_label = tk.Label(root, image=bg_photo)
+bg_label.place(x=0, y=0, relwidth=1, relheight=1)
+root.bind("<Configure>", resize_bg)
 
-# ---------------- Search Bar ----------------
+# ---------------- Rounded Main Frame ----------------
+frame_canvas = tk.Canvas(root, bg="white", highlightthickness=0)
+
+frame_canvas.place(relx=0.5, rely=0.5, anchor="center", width=420, height=660)
+
+r = 30  # corner radius
+x0, y0, x1, y1 = 0, 0, 420, 660
+frame_canvas.create_arc((x0, y0, x0 + 2*r, y0 + 2*r), start=90, extent=90, fill="#ffffff", outline="#ffffff")
+frame_canvas.create_arc((x1 - 2*r, y0, x1, y0 + 2*r), start=0, extent=90, fill="#ffffff", outline="#ffffff")
+frame_canvas.create_arc((x0, y1 - 2*r, x0 + 2*r, y1), start=180, extent=90, fill="#ffffff", outline="#ffffff")
+frame_canvas.create_arc((x1 - 2*r, y1 - 2*r, x1, y1), start=270, extent=90, fill="#ffffff", outline="#ffffff")
+frame_canvas.create_rectangle((r, 0, x1 - r, y1), fill="#ffffff", outline="#ffffff")
+frame_canvas.create_rectangle((0, r, x1, y1 - r), fill="#ffffff", outline="#ffffff")
+
+# Inner frame for widgets
+frame = tk.Frame(frame_canvas, bg="#ffffff", bd=0)
+frame.place(x=0, y=0, width=420, height=660)
+
+# ---------------- Advanced Search Bar ----------------
 search_var = tk.StringVar()
+search_canvas = tk.Canvas(frame, bg="#ffffff", highlightthickness=0)
+search_canvas.place(x=20, y=20, width=380, height=50)
 
-search_canvas = tk.Canvas(frame, bg="#3a3f58", highlightthickness=0)
-search_canvas.place(x=20, y=20, width=320, height=40)
-
-r = 20
-search_canvas.create_arc((0, 0, r*2, r*2), start=90, extent=90, fill="#edf2f4", outline="#edf2f4")
-search_canvas.create_arc((320-r*2, 0, 320, r*2), start=0, extent=90, fill="#edf2f4", outline="#edf2f4")
-search_canvas.create_arc((0, 40-r*2, r*2, 40), start=180, extent=90, fill="#edf2f4", outline="#edf2f4")
-search_canvas.create_arc((320-r*2, 40-r*2, 320, 40), start=270, extent=90, fill="#edf2f4", outline="#edf2f4")
-search_canvas.create_rectangle((r, 0, 320-r, 40), fill="#edf2f4", outline="#edf2f4")
-search_canvas.create_rectangle((0, r, 320, 40-r), fill="#edf2f4", outline="#edf2f4")
+r = 25
+search_canvas.create_arc((0,0,2*r,2*r), start=90, extent=90, fill="#f9f9f9", outline="#f9f9f9")
+search_canvas.create_arc((380-2*r,0,380,2*r), start=0, extent=90, fill="#f9f9f9", outline="#f9f9f9")
+search_canvas.create_arc((0,55-2*r,2*r,55), start=180, extent=90, fill="#f9f9f9", outline="#f9f9f9")
+search_canvas.create_arc((380-2*r,55-2*r,380,55), start=270, extent=90, fill="#f9f9f9", outline="#f9f9f9")
+search_canvas.create_rectangle((r, 0, 380-r, 55), fill="#f9f9f9", outline="#f9f9f9")
+search_canvas.create_rectangle((0, r, 380, 55-r), fill="#f9f9f9", outline="#f9f9f9")
 
 search_entry = tk.Entry(frame, textvariable=search_var, font=("Arial", 14),
-                        bg="#edf2f4", fg="#2b2d42", bd=0)
-search_entry.place(x=35, y=23, width=240, height=30)
+                        bg="#f9f9f9", fg="#2d2d2d", bd=0)
+search_entry.place(x=60, y=25, width=250, height=30)
 
-search_img = Image.open("icons/search.png").resize((30, 30), Image.LANCZOS)
+placeholder_text = "Enter city name..."
+search_entry.insert(0, placeholder_text)
+search_entry.config(fg="grey")
+
+def clear_placeholder(event):
+    if search_entry.get() == placeholder_text:
+        search_entry.delete(0, tk.END)
+        search_entry.config(fg="#2d2d2d")
+
+def add_placeholder(event):
+    if search_entry.get() == "":
+        search_entry.insert(0, placeholder_text)
+        search_entry.config(fg="grey")
+
+search_entry.bind("<FocusIn>", clear_placeholder)
+search_entry.bind("<FocusOut>", add_placeholder)
+
+search_img = Image.open("icons/search.png").resize((25, 25), Image.LANCZOS)
 search_photo = ImageTk.PhotoImage(search_img)
-search_icon = tk.Button(frame, image=search_photo, bg="#edf2f4", bd=0, relief="flat",
+search_icon = tk.Button(frame, image=search_photo, bg="#f9f9f9", bd=0, relief="flat",
                         cursor="hand2", command=lambda: get_weather(search_var.get()))
 search_icon.image = search_photo
-search_icon.place(x=280, y=23, width=30, height=30)
+search_icon.place(x=320, y=27, width=25, height=25)
 
 # ---------------- City and Date ----------------
-city_label = tk.Label(frame, text="City", font=("Arial", 20, "bold"), bg="#3a3f58", fg="white")
-city_label.place(x=20, y=70)
+city_label = tk.Label(frame, text="City", font=("Arial", 22, "bold"), bg="#ffffff", fg="#2d2d2d")
+city_label.place(x=20, y=80)
 
-date_label = tk.Label(frame, text="Date", font=("Arial", 12), bg="#3a3f58", fg="#dcdcdc")
-date_label.place(x=20, y=110)
+date_label = tk.Label(frame, text="Date", font=("Arial", 14), bg="#ffffff", fg="#555555")
+date_label.place(x=20, y=120)
 
 # ---------------- Main Weather Icon & Info ----------------
-main_icon_label = tk.Label(frame, bg="#3a3f58")
-main_icon_label.place(x=105, y=130)
+main_icon_label = tk.Label(frame, bg="#ffffff")
+main_icon_label.place(x=130, y=150)
 
-temp_label = tk.Label(frame, text="0°C", font=("Arial", 40, "bold"), bg="#3a3f58", fg="white")
-temp_label.place(x=130, y=280)
+temp_label = tk.Label(frame, text="0°C", font=("Arial", 46, "bold"), bg="#ffffff", fg="#2d2d2d")
+temp_label.place(x=140, y=300)
 
-weather_label = tk.Label(frame, text="Clear", font=("Arial", 16), bg="#3a3f58", fg="#e0e0e0")
-weather_label.place(x=120, y=340)
+weather_label = tk.Label(frame, text="Clear", font=("Arial", 17), bg="#ffffff", fg="#555555")
+weather_label.place(x=130, y=380)
 
-humidity_label = tk.Label(frame, text="💧 --%", font=("Arial", 14), bg="#3a3f58", fg="white")
-humidity_label.place(x=60, y=380)
+humidity_label = tk.Label(frame, text="💧 --%", font=("Arial", 16), bg="#ffffff", fg="#2d2d2d")
+humidity_label.place(x=60, y=415)
 
-wind_label = tk.Label(frame, text="🌬 -- m/s", font=("Arial", 14), bg="#3a3f58", fg="white")
-wind_label.place(x=200, y=380)
+wind_label = tk.Label(frame, text="🌬 -- m/s", font=("Arial", 16), bg="#ffffff", fg="#2d2d2d")
+wind_label.place(x=220, y=415)
 
 # ---------------- Forecast Section ----------------
-forecast_title = tk.Label(frame, text="3-Day Forecast", font=("Arial", 16, "bold"), bg="#3a3f58", fg="white")
-forecast_title.place(x=100, y=430)
+forecast_title = tk.Label(frame, text="3-Day Forecast", font=("Arial", 16, "bold"), bg="#ffffff", fg="#2d2d2d")
+forecast_title.place(x=120, y=470)
 
-forecast_frame = tk.Frame(frame, bg="#8d99ae")
-forecast_frame.place(x=20, y=470, width=320, height=100)
+forecast_frame = tk.Frame(frame, bg="#e8e8e8")
+forecast_frame.place(x=20, y=510, width=380, height=140)
 
 day_label, icon_label, temp_forecast_label = [], [], []
 for i in range(3):
-    f = tk.Frame(forecast_frame, bg="#edf2f4")
-    f.place(x=15 + i * 100, y=10, width=90, height=80)
+    f = tk.Frame(forecast_frame, bg="#ffffff")
+    f.place(x=15 + i * 120, y=10, width=110, height=120)
 
-    d = tk.Label(f, text="Day", font=("Arial", 10, "bold"), bg="#edf2f4", fg="#2b2d42")
-    d.pack(pady=2)
+    d = tk.Label(f, text="Day", font=("Arial", 12, "bold"), bg="#ffffff", fg="#2d2d2d")
+    d.pack(pady=4)
     day_label.append(d)
 
-    icon = tk.Label(f, bg="#edf2f4")
-    icon.pack()
+    icon = tk.Label(f, bg="#ffffff")
+    icon.pack(pady=4)
     icon_label.append(icon)
 
-    t = tk.Label(f, text="°C", font=("Arial", 12, "bold"), bg="#edf2f4", fg="#2b2d42")
+    t = tk.Label(f, text="°C", font=("Arial", 14, "bold"), bg="#ffffff", fg="#2d2d2d")
     t.pack()
     temp_forecast_label.append(t)
 
