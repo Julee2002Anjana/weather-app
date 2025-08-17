@@ -119,7 +119,7 @@ frame.place(x=0, y=0, width=420, height=660)
 # ---------------- Advanced Search Bar ----------------
 search_var = tk.StringVar()
 search_canvas = tk.Canvas(frame, bg="#ffffff", highlightthickness=0)
-search_canvas.place(x=20, y=20, width=380, height=50)
+search_canvas.place(x=20, y=20, width=380, height=55)
 
 r = 25
 search_canvas.create_arc((0,0,2*r,2*r), start=90, extent=90, fill="#f9f9f9", outline="#f9f9f9")
